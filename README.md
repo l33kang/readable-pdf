@@ -1,20 +1,57 @@
-# Scan-to-Text Converter (Part One)
+# Scan-to-Text Converter
 
-Converts scanned PDFs and photos of printed text into searchable PDFs, clean text PDFs, and word-level JSON.
+A tool for converting scanned documents and images into readable, searchable text.
 
-## Contents
-- `docs/SRS.md` : Software Requirements Specification
-- `schema/ocr_output.example.json` : JSON output format (version 1)
-- `backend/Dockerfile`, `backend/requirements.txt` : backend and worker image
-- `docker-compose.yml` : api, worker, redis (frontend commented out)
-- `scripts/ocr_one.sh` : first test, one scanned PDF to a searchable PDF
-- `eval/` : test pages and hand-typed ground truth
-- `.env.example` : configuration template
+## Project status
 
-## First steps
-1. Put a scanned PDF in `eval/samples/`.
-2. Build the image: `docker compose build api`
-3. Check models: `docker compose run --rm api tesseract --list-langs` (expect `eng`, `kin`, `ara`)
-4. Run: `docker compose run --rm api bash -c "cd /app && ./scripts/ocr_one.sh /data/in.pdf /data/out.pdf"` after mounting your files, or run the script inside the container.
+**Current milestone:** OCR engine and structured JSON export.
 
-The backend code (`backend/app`) is not included yet; the SRS describes what to build. Verify tool versions, the tessdata path, and licenses before release.
+### Implemented
+
+- Extract text from images using Tesseract OCR.
+- Extract individual words with confidence scores.
+- Record word-level bounding boxes in pixel coordinates.
+- Flag words with confidence below 70 for review.
+- Return structured OCR results as a Python dictionary.
+- Export results to JSON.
+- Save JSON output in persistent Docker storage.
+
+### Technology stack
+
+- Python 3.12
+- Tesseract OCR
+- pytesseract
+- Pillow
+- FastAPI
+- Docker Compose
+
+### Project structure
+
+- `backend/app/ocr_engine.py` — OCR extraction and JSON export.
+- `backend/app/main.py` — API entry point.
+- `backend/requirements.txt` — Python dependencies.
+- `docker-compose.yml` — application services.
+- `docs/SRS.md` — Software Requirements Specification.
+- `schema/ocr_output.example.json` — example OCR output.
+- `eval/` — evaluation resources.
+
+### Run the project
+
+Build the API image:
+
+```powershell
+docker compose build api
+```
+
+The OCR engine can be tested inside the API container using Python and Pillow.
+
+### Planned work
+
+- Implement and test the FastAPI health endpoint.
+- Add document upload and validation.
+- Process OCR jobs through a background worker.
+- Generate searchable PDFs and clean text PDFs.
+- Build the frontend.
+- Evaluate OCR quality and improve preprocessing.
+
+See `docs/SRS.md` for the detailed requirements and roadmap.
