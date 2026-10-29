@@ -1,0 +1,24 @@
+services:
+  api:
+    build: ./backend
+    ports: ["8000:8000"]
+    volumes: ["data:/data"]
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATA_DIR=/data
+    depends_on: [redis]
+  worker:
+    build: ./backend
+    command: rq worker --url redis://redis:6379
+    volumes: ["data:/data"]
+    environment:
+      - DATA_DIR=/data
+    depends_on: [redis]
+  redis:
+    image: redis:7-alpine
+  # Enable once the frontend exists in ./frontend with its own Dockerfile
+  # web:
+  #   build: ./frontend
+  #   ports: ["3000:80"]
+volumes:
+  data:

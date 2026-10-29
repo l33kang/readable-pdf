@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "document_id": "00000000-0000-0000-0000-000000000000",
+  "languages": ["eng", "kin"],
+  "pages": [
+    {
+      "page": 1,
+      "width": 2480,
+      "height": 3508,
+      "dpi": 300,
+      "blocks": [
+        {
+          "id": "b1",
+          "type": "text",
+          "bbox": [200, 300, 2200, 900],
+          "paragraphs": [
+            {
+              "id": "p1",
+              "lines": [
+                {
+                  "id": "l1",
+                  "bbox": [200, 300, 2200, 360],
+                  "words": [
+                    {
+                      "id": "w1",
+                      "text": "umwana",
+                      "bbox": [200, 300, 420, 360],
+                      "conf": 91.4,
+                      "corrected": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
