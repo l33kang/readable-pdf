@@ -9,7 +9,7 @@ services:
     depends_on: [redis]
   worker:
     build: ./backend
-    command: rq worker --url redis://redis:6379
+    command: rq worker ocr --url redis://redis:6379
     volumes: ["data:/data"]
     environment:
       - DATA_DIR=/data
