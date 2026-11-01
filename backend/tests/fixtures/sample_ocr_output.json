@@ -1,0 +1,48 @@
+
+{
+  "schema_version": 1,
+  "document_id": "test-document",
+  "languages": ["eng"],
+  "pages": [
+    {
+      "page": 1,
+      "width": 1000,
+      "height": 1500,
+      "dpi": 300,
+      "blocks": [
+        {
+          "id": "b1",
+          "type": "text",
+          "bbox": [100, 100, 400, 180],
+          "paragraphs": [
+            {
+              "id": "p1",
+              "lines": [
+                {
+                  "id": "l1",
+                  "bbox": [100, 100, 400, 180],
+                  "words": [
+                    {
+                      "id": "w1",
+                      "text": "Hello",
+                      "bbox": [100, 100, 220, 150],
+                      "conf": 96.0,
+                      "corrected": false
+                    },
+                    {
+                      "id": "w2",
+                      "text": "world",
+                      "bbox": [230, 100, 400, 150],
+                      "conf": 94.0,
+                      "corrected": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
