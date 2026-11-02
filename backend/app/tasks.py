@@ -6,7 +6,8 @@ from pathlib import Path
 import fitz
 from PIL import Image
 
-from app.ocr_engine import extract_text, extract_blocks
+from app.ocr_engine import extract_blocks
+from app.clean_pdf import generate_clean_pdf
 
 
 LANGUAGES = ["eng"]
@@ -14,7 +15,7 @@ DPI = 300
 
 
 def process_document(document_id: str, file_path: str) -> dict:
-    """Process an uploaded image or PDF."""
+    """Process an uploaded document and generate its outputs."""
 
     source_path = Path(file_path)
 
@@ -26,6 +27,9 @@ def process_document(document_id: str, file_path: str) -> dict:
     results_dir.mkdir(parents=True, exist_ok=True)
 
     output_json = results_dir / f"{document_id}.json"
+    clean_pdf = results_dir / f"{document_id}_clean.pdf"
+
+    searchable_pdf = None
 
     if source_path.suffix.lower() == ".pdf":
         searchable_pdf = results_dir / f"{document_id}_searchable.pdf"
@@ -85,16 +89,19 @@ def process_document(document_id: str, file_path: str) -> dict:
         "pages": pages,
     }
 
+    # Save structured OCR output.
     with open(output_json, "w", encoding="utf-8") as file:
         json.dump(result, file, indent=2, ensure_ascii=False)
+
+    # Generate a new PDF containing digital text, not scanned images.
+    generate_clean_pdf(result, str(clean_pdf))
 
     return {
         "document_id": document_id,
         "status": "completed",
         "searchable_pdf": (
-            str(searchable_pdf)
-            if source_path.suffix.lower() == ".pdf"
-            else None
+            str(searchable_pdf) if searchable_pdf else None
         ),
+        "clean_pdf": str(clean_pdf),
         "result_path": str(output_json),
     }

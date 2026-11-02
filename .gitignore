@@ -10,3 +10,14 @@ node_modules/
 dist/
 build/
 coverage/
+
+# Generated OCR documents and outputs
+/data/
+/backend/data/
+/backend/uploads/
+/backend/results/
+clean-output.pdf
+
+# Temporary files
+*.tmp
+*.log

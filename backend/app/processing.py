@@ -33,10 +33,37 @@ def start_processing(document_id: str):
     matching_files = list(UPLOAD_DIR.glob(f"{document_id}.*"))
 
     if not matching_files:
-        raise HTTPException(
-            status_code=404,
-            detail="Document not found."
-        )
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    # Check whether this document already has an active job.
+    existing_job_id = redis_connection.get(
+        f"document:{document_id}:job_id"
+    )
+
+    if existing_job_id:
+        existing_job_id = existing_job_id.decode("utf-8")
+
+        try:
+            existing_job = Job.fetch(
+                existing_job_id,
+                connection=redis_connection
+            )
+
+            if existing_job.get_status().value in [
+                "queued",
+                "started",
+                "deferred",
+                "scheduled",
+            ]:
+                return {
+                    "document_id": document_id,
+                    "job_id": existing_job.id,
+                    "status": existing_job.get_status().value,
+                    "message": "Processing is already in progress."
+                }
+
+        except Exception:
+            pass
 
     file_path = matching_files[0]
 
@@ -46,7 +73,6 @@ def start_processing(document_id: str):
         str(file_path),
     )
 
-    # Save the relationship between the document and its job.
     redis_connection.set(
         f"document:{document_id}:job_id",
         job.id
@@ -55,7 +81,7 @@ def start_processing(document_id: str):
     return {
         "document_id": document_id,
         "job_id": job.id,
-        "status": "queued",
+        "status": "queued"
     }
 
 
@@ -114,6 +140,7 @@ def get_document(document_id: str):
             status = "unknown"
 
     searchable_pdf = RESULTS_DIR / f"{document_id}_searchable.pdf"
+    clean_pdf = RESULTS_DIR / f"{document_id}_clean.pdf"
     json_file = RESULTS_DIR / f"{document_id}.json"
 
     return {
@@ -122,6 +149,7 @@ def get_document(document_id: str):
         "job_id": job_id,
         "outputs": {
             "searchable_pdf": searchable_pdf.exists(),
+            "clean_pdf": clean_pdf.exists(),
             "json": json_file.exists(),
         },
         "result": job_result,
@@ -138,6 +166,11 @@ def download_document(document_id: str, type: str):
         media_type = "application/pdf"
         filename = f"{document_id}_searchable.pdf"
 
+    elif type == "clean":
+        file_path = RESULTS_DIR / f"{document_id}_clean.pdf"
+        media_type = "application/pdf"
+        filename = f"{document_id}_clean.pdf"
+
     elif type == "json":
         file_path = RESULTS_DIR / f"{document_id}.json"
         media_type = "application/json"
@@ -146,7 +179,7 @@ def download_document(document_id: str, type: str):
     else:
         raise HTTPException(
             status_code=400,
-            detail="Invalid download type. Use 'searchable' or 'json'."
+            detail="Invalid download type. Use 'searchable', 'clean', or 'json'."
         )
 
     if not file_path.is_file():
