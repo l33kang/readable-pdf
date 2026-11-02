@@ -1,57 +1,106 @@
 # Scan-to-Text Converter
 
-A tool for converting scanned documents and images into readable, searchable text.
+A web application that converts scanned documents and images into readable digital documents using OCR.
 
-## Project status
+## Overview
 
-**Current milestone:** OCR engine and structured JSON export.
+Scanned documents are often stored as images, making their text difficult to search, select, or edit. This project uses Optical Character Recognition (OCR) to extract text and provide different output formats.
 
-### Implemented
+## Features
 
-- Extract text from images using Tesseract OCR.
-- Extract individual words with confidence scores.
-- Record word-level bounding boxes in pixel coordinates.
-- Flag words with confidence below 70 for review.
-- Return structured OCR results as a Python dictionary.
-- Export results to JSON.
-- Save JSON output in persistent Docker storage.
+- Extract text from scanned PDFs and images.
+- Generate searchable PDFs while preserving the original page appearance.
+- Create clean PDFs containing reconstructed text.
+- Export extracted text as `.txt` files.
+- Detect possible OCR errors and suggest word corrections.
+- Review, accept, or reject correction suggestions.
+- Store processing results in persistent Docker storage.
 
-### Technology stack
+## Technology Stack
 
-- Python 3.12
-- Tesseract OCR
-- pytesseract
-- Pillow
-- FastAPI
+- **Backend:** Python, FastAPI
+- **OCR:** Tesseract, pytesseract, OCRmyPDF
+- **PDF processing:** PyMuPDF, ReportLab
+- **Frontend:** React, Vite
+- **Background jobs:** RQ, Redis
+- **Deployment:** Docker Compose
+
+## Getting Started
+
+### Requirements
+
+- Docker Desktop
 - Docker Compose
+- Node.js and npm
 
-### Project structure
+### Run the application
 
-- `backend/app/ocr_engine.py` — OCR extraction and JSON export.
-- `backend/app/main.py` — API entry point.
-- `backend/requirements.txt` — Python dependencies.
-- `docker-compose.yml` — application services.
-- `docs/SRS.md` — Software Requirements Specification.
-- `schema/ocr_output.example.json` — example OCR output.
-- `eval/` — evaluation resources.
+Clone the repository:
 
-### Run the project
-
-Build the API image:
-
-```powershell
-docker compose build api
+```bash
+git clone https://github.com/l33kang/readable-pdf.git
+cd scan-to-text
 ```
 
-The OCR engine can be tested inside the API container using Python and Pillow.
+Start the backend services:
 
-### Planned work
+```bash
+docker compose up --build -d
+```
 
-- Implement and test the FastAPI health endpoint.
-- Add document upload and validation.
-- Process OCR jobs through a background worker.
-- Generate searchable PDFs and clean text PDFs.
-- Build the frontend.
-- Evaluate OCR quality and improve preprocessing.
+Start the frontend:
 
-See `docs/SRS.md` for the detailed requirements and roadmap.
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the frontend at:
+
+```text
+http://localhost:5173
+```
+
+The API documentation is available at:
+
+```text
+http://localhost:8000/docs
+```
+
+## Project Structure
+
+```text
+scan-to-text/
+├── backend/
+│   └── app/
+│       ├── ocr_engine.py
+│       ├── clean_pdf.py
+│       ├── processing.py
+│       ├── tasks.py
+│       └── upload.py
+├── frontend/
+│   └── src/
+├── docs/
+│   └── SRS.md
+├── schema/
+│   └── ocr_output.example.json
+├── eval/
+├── scripts/
+├── docker-compose.yml
+└── README.md
+```
+
+## Output Formats
+
+| Format | Description |
+|---|---|
+| Searchable PDF | Original appearance with searchable text |
+| Simple PDF | Reconstructed document containing readable text |
+| Text document | Extracted text in `.txt` format |
+
+## Current Status
+
+The application supports document uploads, OCR processing, correction review, and downloading results in all three output formats.
+
+Further work will focus on improving OCR accuracy, document layout reconstruction, and the overall reading experience.
