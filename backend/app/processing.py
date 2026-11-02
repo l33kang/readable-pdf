@@ -17,6 +17,15 @@ class CorrectionDecisionRequest(BaseModel):
     decision: str
 
 
+class BulkCorrectionDecisionItem(BaseModel):
+    correction_id: str
+    decision: str
+
+
+class BulkCorrectionDecisionRequest(BaseModel):
+    decisions: list[BulkCorrectionDecisionItem]
+
+
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
 UPLOAD_DIR = DATA_DIR / "uploads"
 RESULTS_DIR = DATA_DIR / "results"
@@ -202,6 +211,156 @@ def download_document(document_id: str, type: str):
         media_type=media_type,
         filename=filename,
     )
+
+
+@router.get("/api/documents/{document_id}/corrections")
+def get_corrections(document_id: str):
+    document_id = validate_document_id(document_id)
+    report_file = RESULTS_DIR / f"{document_id}_report.json"
+    decisions_file = RESULTS_DIR / f"{document_id}_correction_decisions.json"
+    if not report_file.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Correction report not found.",
+        )
+    with open(report_file, "r", encoding="utf-8") as file:
+        report = json.load(file)
+    decisions = {}
+    if decisions_file.is_file():
+        with open(decisions_file, "r", encoding="utf-8") as file:
+            decisions = json.load(file)
+    corrections = []
+    for item in report.get("corrections", []):
+        correction = item.copy()
+        decision = decisions.get(correction["id"])
+        correction["status"] = (
+            "auto_applied"
+            if correction["context_score"] == 2
+            else "needs_review"
+        )
+        correction["decision"] = decision
+        correction["effective_status"] = (
+            decision if decision else correction["status"]
+        )
+        corrections.append(correction)
+    correction_statistics = {
+        "total": len(corrections),
+        "pending_review": sum(
+            1 for item in corrections
+            if item["decision"] is None
+            and item["status"] == "needs_review"
+        ),
+        "accepted": sum(
+            1 for item in corrections
+            if item["decision"] == "accepted"
+        ),
+        "rejected": sum(
+            1 for item in corrections
+            if item["decision"] == "rejected"
+        ),
+        "auto_applied": sum(
+            1 for item in corrections
+            if item["decision"] is None
+            and item["status"] == "auto_applied"
+        ),
+    }
+    return {
+        "document_id": document_id,
+        "summary": report.get("summary", {}),
+        "corrections": corrections,
+        "correction_statistics": correction_statistics,
+    }
+
+
+@router.post("/api/documents/{document_id}/corrections/bulk")
+def bulk_review_corrections(
+    document_id: str,
+    request: BulkCorrectionDecisionRequest,
+):
+    document_id = validate_document_id(document_id)
+    report_file = RESULTS_DIR / f"{document_id}_report.json"
+    decisions_file = RESULTS_DIR / f"{document_id}_correction_decisions.json"
+
+    if not report_file.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Correction report not found.",
+        )
+
+    if not request.decisions:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one correction decision is required.",
+        )
+
+    correction_ids = [
+        item.correction_id for item in request.decisions
+    ]
+
+    if len(correction_ids) != len(set(correction_ids)):
+        raise HTTPException(
+            status_code=400,
+            detail="Duplicate correction IDs are not allowed.",
+        )
+
+    for item in request.decisions:
+        if item.decision not in ("accepted", "rejected"):
+            raise HTTPException(
+                status_code=400,
+                detail="Decision must be 'accepted' or 'rejected'.",
+            )
+
+    with open(report_file, "r", encoding="utf-8") as file:
+        report = json.load(file)
+
+    valid_ids = {
+        correction["id"]
+        for correction in report.get("corrections", [])
+    }
+    invalid_ids = [
+        correction_id
+        for correction_id in correction_ids
+        if correction_id not in valid_ids
+    ]
+    if invalid_ids:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "message": "Some correction IDs were not found.",
+                "invalid_correction_ids": invalid_ids,
+            },
+        )
+
+    decisions = {}
+    if decisions_file.is_file():
+        with open(decisions_file, "r", encoding="utf-8") as file:
+            decisions = json.load(file)
+
+    for item in request.decisions:
+        decisions[item.correction_id] = item.decision
+
+    with open(decisions_file, "w", encoding="utf-8") as file:
+        json.dump(decisions, file, indent=2)
+
+    job = ocr_queue.enqueue(
+        "app.tasks.rebuild_clean_document",
+        document_id,
+    )
+
+    return {
+        "document_id": document_id,
+        "updated_count": len(request.decisions),
+        "decisions": [
+            {
+                "correction_id": item.correction_id,
+                "decision": item.decision,
+            }
+            for item in request.decisions
+        ],
+        "job_id": job.id,
+        "status": "queued",
+    }
+
 
 @router.post("/api/documents/{document_id}/corrections/{correction_id}")
 def review_correction(
