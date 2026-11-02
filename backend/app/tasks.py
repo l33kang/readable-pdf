@@ -7,7 +7,7 @@ import fitz
 from PIL import Image
 
 from app.ocr_engine import extract_blocks
-from app.clean_pdf import generate_clean_pdf
+from app.clean_pdf import build_elements, to_text, render_pdf, write_report
 
 
 LANGUAGES = ["eng"]
@@ -94,7 +94,21 @@ def process_document(document_id: str, file_path: str) -> dict:
         json.dump(result, file, indent=2, ensure_ascii=False)
 
     # Generate a new PDF containing digital text, not scanned images.
-    generate_clean_pdf(result, str(clean_pdf))
+    # Diagnostic: inspect reconstructed text before PDF rendering.
+    build_result = build_elements(result)
+    correction_report = results_dir / f"{document_id}_report.json"
+    correction_report_text = results_dir / f"{document_id}_report.txt"
+    write_report(
+        build_result,
+        str(correction_report),
+        str(correction_report_text),
+    )
+
+    clean_text = to_text(build_result.elements)
+    debug_text = results_dir / f"{document_id}_clean_debug.txt"
+    debug_text.write_text(clean_text, encoding="utf-8")
+
+    render_pdf(build_result.elements, str(clean_pdf))
 
     return {
         "document_id": document_id,
@@ -104,4 +118,45 @@ def process_document(document_id: str, file_path: str) -> dict:
         ),
         "clean_pdf": str(clean_pdf),
         "result_path": str(output_json),
+    }
+
+
+def rebuild_clean_document(document_id: str) -> dict:
+    """Regenerate clean outputs using saved correction decisions."""
+    results_dir = Path(os.getenv("DATA_DIR", "/data")) / "results"
+    output_json = results_dir / f"{document_id}.json"
+    decisions_file = results_dir / f"{document_id}_correction_decisions.json"
+    clean_pdf = results_dir / f"{document_id}_clean.pdf"
+
+    if not output_json.is_file():
+        raise FileNotFoundError("OCR result not found.")
+
+    with open(output_json, "r", encoding="utf-8") as file:
+        ocr_data = json.load(file)
+
+    correction_decisions = {}
+    if decisions_file.is_file():
+        with open(decisions_file, "r", encoding="utf-8") as file:
+            correction_decisions = json.load(file)
+
+    build_result = build_elements(
+        ocr_data,
+        correction_decisions=correction_decisions,
+    )
+    write_report(
+        build_result,
+        str(results_dir / f"{document_id}_report.json"),
+        str(results_dir / f"{document_id}_report.txt"),
+    )
+    clean_text = to_text(build_result.elements)
+    (results_dir / f"{document_id}_clean_debug.txt").write_text(
+        clean_text,
+        encoding="utf-8",
+    )
+    render_pdf(build_result.elements, str(clean_pdf))
+
+    return {
+        "document_id": document_id,
+        "status": "completed",
+        "clean_pdf": str(clean_pdf),
     }

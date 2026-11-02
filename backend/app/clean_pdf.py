@@ -29,6 +29,11 @@ from html import escape
 from pathlib import Path
 from typing import Iterable, Optional
 
+try:
+    from wordfreq import zipf_frequency
+except ImportError:
+    zipf_frequency = None
+
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
@@ -96,6 +101,7 @@ class BuildResult:
     elements: list[Element]
     removed: list[Removed] = field(default_factory=list)
     flagged: list[Removed] = field(default_factory=list)  # kept but suspicious
+    corrections: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -387,6 +393,81 @@ def _is_junk_token(tok: str) -> bool:
     if len(tok) >= 3 and alnum / len(tok) < 0.5:
         return True
     return False
+
+
+def _split_merged_token(token: str) -> Optional[str]:
+    """Suggest a split for a likely merged OCR token."""
+    if zipf_frequency is None:
+        return None
+    if not token.isalpha() or len(token) < 4:
+        return None
+    original = token.lower()
+    original_freq = zipf_frequency(original, "en")
+    best_split = None
+    best_score = 0.0
+    for i in range(1, len(original)):
+        left = original[:i]
+        right = original[i:]
+        if len(left) < 1 or len(right) < 2:
+            continue
+        if len(left) == 1 and left not in {"a", "i"}:
+            continue
+        left_freq = zipf_frequency(left, "en")
+        right_freq = zipf_frequency(right, "en")
+        if left_freq < 3.5 or right_freq < 3.5:
+            continue
+        score = min(left_freq, right_freq) - original_freq
+        if score > best_score:
+            best_score = score
+            best_split = (left, right)
+    if best_split is None or best_score < 1.5:
+        return None
+    left, right = best_split
+    if token.isupper():
+        left = left.upper()
+        right = right.upper()
+    else:
+        if token[0].isupper():
+            left = left.capitalize()
+        if token[len(left)].isupper():
+            right = right.capitalize()
+    return f"{left} {right}"
+
+
+def _split_with_context(
+    token: str,
+    previous: Optional[str] = None,
+    following: Optional[str] = None,
+) -> Optional[str]:
+    """Suggest a merged-word split using neighbouring words."""
+
+    if zipf_frequency is None:
+        return None
+
+    suggestion = _split_merged_token(token)
+
+    if suggestion is None:
+        return None
+
+    left, right = suggestion.split(" ", 1)
+
+    context_score = 0
+
+    if previous:
+        phrase = f"{previous.lower()} {left.lower()}"
+        if zipf_frequency(phrase, "en") >= 3.5:
+            context_score += 1
+
+    if following:
+        phrase = f"{right.lower()} {following.lower()}"
+        if zipf_frequency(phrase, "en") >= 3.5:
+            context_score += 1
+
+    # Require stronger evidence when only one neighbouring word exists.
+    if context_score < 1:
+        return None
+
+    return suggestion
 
 
 def _band(box, page_height: float, cfg: CleanConfig) -> Optional[str]:
@@ -709,8 +790,13 @@ def _continues(prev: Element, rec: _Rec, body_h: float, cfg: CleanConfig) -> boo
 # --------------------------------------------------------------------------
 # Stage 1: OCR JSON -> elements
 # --------------------------------------------------------------------------
-def build_elements(ocr_data: dict, cfg: Optional[CleanConfig] = None) -> BuildResult:
+def build_elements(
+    ocr_data: dict,
+    cfg: Optional[CleanConfig] = None,
+    correction_decisions: Optional[dict[str, str]] = None,
+) -> BuildResult:
     cfg = cfg or CleanConfig()
+    correction_decisions = correction_decisions or {}
     pages = ocr_data.get("pages", [])
     if not pages:
         raise ValueError("OCR data contains no pages.")
@@ -719,6 +805,7 @@ def build_elements(ocr_data: dict, cfg: Optional[CleanConfig] = None) -> BuildRe
     doc_conf = _doc_conf(pages)
     removed: list[Removed] = []
     flagged: list[Removed] = []
+    corrections: list[dict] = []
 
     # ---- Pass 1: ordered records with confidence and geometry ----------
     recs: list[_Rec] = []
@@ -733,7 +820,7 @@ def build_elements(ocr_data: dict, cfg: Optional[CleanConfig] = None) -> BuildRe
             xs = [b.get("bbox")[2] for b in blocks if _valid_box(b.get("bbox"))]
             page_w = max(xs) if xs else 0
 
-        for block in blocks:
+        for block_index, block in enumerate(blocks):
             if block.get("type", "text") != "text":
                 box = block.get("bbox") if _valid_box(block.get("bbox")) else None
                 recs.append(_Rec(page_no, "figure", page_w, page_h, bbox=box))
@@ -744,8 +831,70 @@ def build_elements(ocr_data: dict, cfg: Optional[CleanConfig] = None) -> BuildRe
             block_box = block.get("bbox") if _valid_box(block.get("bbox")) else _bbox(
                 w for p in block.get("paragraphs", []) for w in _words(p)
             )
-            for para in block.get("paragraphs", []):
+            for paragraph_index, para in enumerate(block.get("paragraphs", [])):
                 stats, kept_lines, dropped = _analyze_paragraph(para, cfg, doc_conf)
+                corrected_lines = []
+                for line_index, line_text in enumerate(kept_lines):
+                    tokens = line_text.split()
+                    corrected_tokens = []
+                    for i, token in enumerate(tokens):
+                        previous = tokens[i - 1] if i > 0 else None
+                        following = tokens[i + 1] if i + 1 < len(tokens) else None
+                        suggestion = _split_with_context(
+                            token, previous, following
+                        )
+                        if suggestion:
+                            left, right = suggestion.split(" ", 1)
+                            context_score = 0
+                            if previous and zipf_frequency(
+                                f"{previous.lower()} {left.lower()}", "en"
+                            ) >= 3.5:
+                                context_score += 1
+                            if following and zipf_frequency(
+                                f"{right.lower()} {following.lower()}", "en"
+                            ) >= 3.5:
+                                context_score += 1
+                            auto_apply = context_score == 2
+                            correction_id = (
+                                f"p{page_no}-b{block_index}-para{paragraph_index}"
+                                f"-line{line_index}-word{i}"
+                            )
+                            decision = correction_decisions.get(correction_id)
+                            apply_correction = (
+                                decision == "accepted"
+                                or (decision is None and auto_apply)
+                            )
+                            if decision == "accepted":
+                                correction_status = "accepted"
+                            elif decision == "rejected":
+                                correction_status = "rejected"
+                            elif auto_apply and decision is None:
+                                correction_status = "auto_applied"
+                            else:
+                                correction_status = "needs_review"
+                            corrections.append({
+                                "id": correction_id,
+                                "page": page_no,
+                                "block_index": block_index,
+                                "paragraph_index": paragraph_index,
+                                "line_index": line_index,
+                                "word_index": i,
+                                "original": token,
+                                "corrected": suggestion,
+                                "previous": previous,
+                                "following": following,
+                                "method": "merged_word_split",
+                                "context_score": context_score,
+                                "status": correction_status,
+                            })
+                            if apply_correction:
+                                corrected_tokens.extend(suggestion.split())
+                            else:
+                                corrected_tokens.append(token)
+                        else:
+                            corrected_tokens.append(token)
+                    corrected_lines.append(" ".join(corrected_tokens))
+                kept_lines = corrected_lines
                 box = _bbox(_words(para))
                 if not kept_lines:
                     if stats.n_words:
@@ -913,7 +1062,7 @@ def build_elements(ocr_data: dict, cfg: Optional[CleanConfig] = None) -> BuildRe
 
     log.info("clean_pdf: %d elements, %d removed, %d flagged",
              len(elements), len(removed), len(flagged))
-    return BuildResult(elements, removed, flagged)
+    return BuildResult(elements, removed, flagged, corrections)
 
 
 # --------------------------------------------------------------------------
@@ -926,10 +1075,12 @@ def report_dict(result: BuildResult) -> dict:
                 re.sub(r"\s*\(.*\)$", "", x.reason) for x in result.removed)),
             "removed_total": len(result.removed),
             "flagged_total": len(result.flagged),
+            "correction_total": len(result.corrections),
             "elements": len(result.elements),
         },
         "removed": [asdict(x) for x in result.removed],
         "flagged": [asdict(x) for x in result.flagged],
+        "corrections": result.corrections,
     }
 
 

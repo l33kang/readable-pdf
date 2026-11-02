@@ -1,14 +1,21 @@
+import json
 import os
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from rq.job import Job
 
 from app.queue import ocr_queue, redis_connection
 
 router = APIRouter()
+
+
+class CorrectionDecisionRequest(BaseModel):
+    decision: str
+
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
 UPLOAD_DIR = DATA_DIR / "uploads"
@@ -142,6 +149,7 @@ def get_document(document_id: str):
     searchable_pdf = RESULTS_DIR / f"{document_id}_searchable.pdf"
     clean_pdf = RESULTS_DIR / f"{document_id}_clean.pdf"
     json_file = RESULTS_DIR / f"{document_id}.json"
+    correction_report = RESULTS_DIR / f"{document_id}_report.json"
 
     return {
         "document_id": document_id,
@@ -151,6 +159,7 @@ def get_document(document_id: str):
             "searchable_pdf": searchable_pdf.exists(),
             "clean_pdf": clean_pdf.exists(),
             "json": json_file.exists(),
+            "correction_report": correction_report.exists(),
         },
         "result": job_result,
         "error": error,
@@ -193,3 +202,65 @@ def download_document(document_id: str, type: str):
         media_type=media_type,
         filename=filename,
     )
+
+@router.post("/api/documents/{document_id}/corrections/{correction_id}")
+def review_correction(
+    document_id: str,
+    correction_id: str,
+    request: CorrectionDecisionRequest,
+):
+    document_id = validate_document_id(document_id)
+
+    if request.decision not in ["accepted", "rejected"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Decision must be 'accepted' or 'rejected'.",
+        )
+
+    report_file = RESULTS_DIR / f"{document_id}_report.json"
+    decisions_file = RESULTS_DIR / f"{document_id}_correction_decisions.json"
+    ocr_file = RESULTS_DIR / f"{document_id}.json"
+
+    if not ocr_file.is_file() or not report_file.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Processed document or correction report not found.",
+        )
+
+    with open(report_file, "r", encoding="utf-8") as file:
+        report = json.load(file)
+
+    correction_exists = any(
+        item.get("id") == correction_id
+        for item in report.get("corrections", [])
+    )
+
+    if not correction_exists:
+        raise HTTPException(
+            status_code=404,
+            detail="Correction not found.",
+        )
+
+    decisions = {}
+
+    if decisions_file.is_file():
+        with open(decisions_file, "r", encoding="utf-8") as file:
+            decisions = json.load(file)
+
+    decisions[correction_id] = request.decision
+
+    with open(decisions_file, "w", encoding="utf-8") as file:
+        json.dump(decisions, file, indent=2)
+
+    job = ocr_queue.enqueue(
+        "app.tasks.rebuild_clean_document",
+        document_id,
+    )
+
+    return {
+        "document_id": document_id,
+        "correction_id": correction_id,
+        "decision": request.decision,
+        "job_id": job.id,
+        "status": "queued",
+    }

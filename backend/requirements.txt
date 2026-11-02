@@ -16,3 +16,4 @@ pydantic
 jiwer
 rapidfuzz
 pytest
+wordfreq
