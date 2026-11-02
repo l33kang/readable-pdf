@@ -1,3 +1,4 @@
+
 import os
 import json
 import subprocess
@@ -28,6 +29,7 @@ def process_document(document_id: str, file_path: str) -> dict:
 
     output_json = results_dir / f"{document_id}.json"
     clean_pdf = results_dir / f"{document_id}_clean.pdf"
+    text_file = results_dir / f"{document_id}.txt"
 
     searchable_pdf = None
 
@@ -93,21 +95,27 @@ def process_document(document_id: str, file_path: str) -> dict:
     with open(output_json, "w", encoding="utf-8") as file:
         json.dump(result, file, indent=2, ensure_ascii=False)
 
-    # Generate a new PDF containing digital text, not scanned images.
-    # Diagnostic: inspect reconstructed text before PDF rendering.
+    # Build reconstructed text and correction suggestions.
     build_result = build_elements(result)
-    correction_report = results_dir / f"{document_id}_report.json"
-    correction_report_text = results_dir / f"{document_id}_report.txt"
+
     write_report(
         build_result,
-        str(correction_report),
-        str(correction_report_text),
+        str(results_dir / f"{document_id}_report.json"),
+        str(results_dir / f"{document_id}_report.txt"),
     )
 
     clean_text = to_text(build_result.elements)
-    debug_text = results_dir / f"{document_id}_clean_debug.txt"
-    debug_text.write_text(clean_text, encoding="utf-8")
 
+    # Save plain text output.
+    text_file.write_text(clean_text, encoding="utf-8")
+
+    # Save diagnostic text.
+    (results_dir / f"{document_id}_clean_debug.txt").write_text(
+        clean_text,
+        encoding="utf-8",
+    )
+
+    # Generate reconstructed PDF.
     render_pdf(build_result.elements, str(clean_pdf))
 
     return {
@@ -117,16 +125,22 @@ def process_document(document_id: str, file_path: str) -> dict:
             str(searchable_pdf) if searchable_pdf else None
         ),
         "clean_pdf": str(clean_pdf),
+        "text_file": str(text_file),
         "result_path": str(output_json),
     }
 
 
 def rebuild_clean_document(document_id: str) -> dict:
     """Regenerate clean outputs using saved correction decisions."""
+
     results_dir = Path(os.getenv("DATA_DIR", "/data")) / "results"
+
     output_json = results_dir / f"{document_id}.json"
-    decisions_file = results_dir / f"{document_id}_correction_decisions.json"
+    decisions_file = (
+        results_dir / f"{document_id}_correction_decisions.json"
+    )
     clean_pdf = results_dir / f"{document_id}_clean.pdf"
+    text_file = results_dir / f"{document_id}.txt"
 
     if not output_json.is_file():
         raise FileNotFoundError("OCR result not found.")
@@ -135,6 +149,7 @@ def rebuild_clean_document(document_id: str) -> dict:
         ocr_data = json.load(file)
 
     correction_decisions = {}
+
     if decisions_file.is_file():
         with open(decisions_file, "r", encoding="utf-8") as file:
             correction_decisions = json.load(file)
@@ -143,20 +158,28 @@ def rebuild_clean_document(document_id: str) -> dict:
         ocr_data,
         correction_decisions=correction_decisions,
     )
+
     write_report(
         build_result,
         str(results_dir / f"{document_id}_report.json"),
         str(results_dir / f"{document_id}_report.txt"),
     )
+
     clean_text = to_text(build_result.elements)
+
+    # Update text output after corrections.
+    text_file.write_text(clean_text, encoding="utf-8")
+
     (results_dir / f"{document_id}_clean_debug.txt").write_text(
         clean_text,
         encoding="utf-8",
     )
+
     render_pdf(build_result.elements, str(clean_pdf))
 
     return {
         "document_id": document_id,
         "status": "completed",
         "clean_pdf": str(clean_pdf),
+        "text_file": str(text_file),
     }

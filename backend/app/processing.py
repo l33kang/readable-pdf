@@ -194,10 +194,15 @@ def download_document(document_id: str, type: str):
         media_type = "application/json"
         filename = f"{document_id}.json"
 
+    elif type == "text":
+        file_path = RESULTS_DIR / f"{document_id}.txt"
+        media_type = "text/plain"
+        filename = f"{document_id}.txt"
+
     else:
         raise HTTPException(
             status_code=400,
-            detail="Invalid download type. Use 'searchable', 'clean', or 'json'."
+            detail="Invalid download type."
         )
 
     if not file_path.is_file():
