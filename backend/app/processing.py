@@ -17,6 +17,10 @@ class CorrectionDecisionRequest(BaseModel):
     decision: str
 
 
+class ProcessingRequest(BaseModel):
+    output_format: str
+
+
 class BulkCorrectionDecisionItem(BaseModel):
     correction_id: str
     decision: str
@@ -43,7 +47,20 @@ def validate_document_id(document_id: str) -> str:
 
 
 @router.post("/api/documents/{document_id}/process")
-def start_processing(document_id: str):
+def start_processing(
+    document_id: str,
+    request: ProcessingRequest,
+):
+    if request.output_format not in (
+        "searchable_pdf",
+        "simple_pdf",
+        "text",
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid output format.",
+        )
+
     document_id = validate_document_id(document_id)
 
     matching_files = list(UPLOAD_DIR.glob(f"{document_id}.*"))
@@ -87,6 +104,7 @@ def start_processing(document_id: str):
         "app.tasks.process_document",
         document_id,
         str(file_path),
+        request.output_format,
     )
 
     redis_connection.set(

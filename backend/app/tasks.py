@@ -15,8 +15,14 @@ LANGUAGES = ["eng"]
 DPI = 300
 
 
-def process_document(document_id: str, file_path: str) -> dict:
-    """Process an uploaded document and generate its outputs."""
+def process_document(
+    document_id: str,
+    file_path: str,
+    output_format: str = "searchable_pdf",
+) -> dict:
+    """Process a document and generate only the requested output."""
+    if output_format not in ("searchable_pdf", "simple_pdf", "text"):
+        raise ValueError("Invalid output format.")
 
     source_path = Path(file_path)
 
@@ -27,14 +33,16 @@ def process_document(document_id: str, file_path: str) -> dict:
     results_dir = data_dir / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    output_json = results_dir / f"{document_id}.json"
+    searchable_pdf = results_dir / f"{document_id}_searchable.pdf"
     clean_pdf = results_dir / f"{document_id}_clean.pdf"
+    output_json = results_dir / f"{document_id}.json"
     text_file = results_dir / f"{document_id}.txt"
 
-    searchable_pdf = None
-
-    if source_path.suffix.lower() == ".pdf":
-        searchable_pdf = results_dir / f"{document_id}_searchable.pdf"
+    # SEARCHABLE PDF: OCRmyPDF handles OCR and PDF creation.
+    # Do not run extract_blocks() or correction analysis here.
+    if output_format == "searchable_pdf":
+        if source_path.suffix.lower() != ".pdf":
+            raise ValueError("Searchable PDF requires a PDF input.")
 
         subprocess.run(
             [
@@ -49,9 +57,18 @@ def process_document(document_id: str, file_path: str) -> dict:
             check=True,
         )
 
-        pages = []
+        return {
+            "document_id": document_id,
+            "status": "completed",
+            "output_format": output_format,
+            "searchable_pdf": str(searchable_pdf),
+        }
 
-        with fitz.open(searchable_pdf) as pdf:
+    # SIMPLE PDF and TEXT: perform one structured OCR pass.
+    pages = []
+
+    if source_path.suffix.lower() == ".pdf":
+        with fitz.open(source_path) as pdf:
             for page_number, page in enumerate(pdf, start=1):
                 pixmap = page.get_pixmap(dpi=DPI, alpha=False)
 
@@ -76,13 +93,15 @@ def process_document(document_id: str, file_path: str) -> dict:
         with Image.open(source_path) as image:
             width, height = image.size
 
-        pages = [{
-            "page": 1,
-            "width": width,
-            "height": height,
-            "dpi": DPI,
-            "blocks": extract_blocks(str(source_path)),
-        }]
+        pages = [
+            {
+                "page": 1,
+                "width": width,
+                "height": height,
+                "dpi": DPI,
+                "blocks": extract_blocks(str(source_path)),
+            }
+        ]
 
     result = {
         "schema_version": 1,
@@ -91,11 +110,10 @@ def process_document(document_id: str, file_path: str) -> dict:
         "pages": pages,
     }
 
-    # Save structured OCR output.
     with open(output_json, "w", encoding="utf-8") as file:
         json.dump(result, file, indent=2, ensure_ascii=False)
 
-    # Build reconstructed text and correction suggestions.
+    # Build correction suggestions for text-based outputs.
     build_result = build_elements(result)
 
     write_report(
@@ -106,26 +124,24 @@ def process_document(document_id: str, file_path: str) -> dict:
 
     clean_text = to_text(build_result.elements)
 
-    # Save plain text output.
-    text_file.write_text(clean_text, encoding="utf-8")
+    if output_format == "text":
+        text_file.write_text(clean_text, encoding="utf-8")
 
-    # Save diagnostic text.
-    (results_dir / f"{document_id}_clean_debug.txt").write_text(
-        clean_text,
+    elif output_format == "simple_pdf":
+        render_pdf(build_result.elements, str(clean_pdf))
+
+    # Remember which output was requested for correction rebuilds.
+    (results_dir / f"{document_id}_processing.json").write_text(
+        json.dumps({"output_format": output_format}),
         encoding="utf-8",
     )
-
-    # Generate reconstructed PDF.
-    render_pdf(build_result.elements, str(clean_pdf))
 
     return {
         "document_id": document_id,
         "status": "completed",
-        "searchable_pdf": (
-            str(searchable_pdf) if searchable_pdf else None
-        ),
-        "clean_pdf": str(clean_pdf),
-        "text_file": str(text_file),
+        "output_format": output_format,
+        "clean_pdf": str(clean_pdf) if output_format == "simple_pdf" else None,
+        "text_file": str(text_file) if output_format == "text" else None,
         "result_path": str(output_json),
     }
 
@@ -136,6 +152,7 @@ def rebuild_clean_document(document_id: str) -> dict:
     results_dir = Path(os.getenv("DATA_DIR", "/data")) / "results"
 
     output_json = results_dir / f"{document_id}.json"
+    processing_file = results_dir / f"{document_id}_processing.json"
     decisions_file = (
         results_dir / f"{document_id}_correction_decisions.json"
     )
@@ -144,6 +161,13 @@ def rebuild_clean_document(document_id: str) -> dict:
 
     if not output_json.is_file():
         raise FileNotFoundError("OCR result not found.")
+
+    if not processing_file.is_file():
+        raise FileNotFoundError("Processing metadata not found.")
+    with open(processing_file, "r", encoding="utf-8") as file:
+        output_format = json.load(file).get("output_format")
+    if output_format not in ("simple_pdf", "text"):
+        raise ValueError("Invalid output format for correction rebuild.")
 
     with open(output_json, "r", encoding="utf-8") as file:
         ocr_data = json.load(file)
@@ -167,19 +191,16 @@ def rebuild_clean_document(document_id: str) -> dict:
 
     clean_text = to_text(build_result.elements)
 
-    # Update text output after corrections.
-    text_file.write_text(clean_text, encoding="utf-8")
+    if output_format == "text":
+        text_file.write_text(clean_text, encoding="utf-8")
 
-    (results_dir / f"{document_id}_clean_debug.txt").write_text(
-        clean_text,
-        encoding="utf-8",
-    )
-
-    render_pdf(build_result.elements, str(clean_pdf))
+    elif output_format == "simple_pdf":
+        render_pdf(build_result.elements, str(clean_pdf))
 
     return {
         "document_id": document_id,
         "status": "completed",
-        "clean_pdf": str(clean_pdf),
-        "text_file": str(text_file),
+        "output_format": output_format,
+        "clean_pdf": str(clean_pdf) if output_format == "simple_pdf" else None,
+        "text_file": str(text_file) if output_format == "text" else None,
     }
