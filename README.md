@@ -1,29 +1,54 @@
-# Scan-to-Text Converter
+# readablePDF
 
-A web application that converts scanned documents and images into readable digital documents using OCR.
+**Turn scanned books, documents, and photographs into readable, searchable digital documents.**
 
-## Overview
+readablePDF is an OCR-powered web application that transforms scanned PDFs and images into accessible digital documents. It extracts text while offering different output formats depending on whether users want to preserve the original appearance, obtain a clean reconstructed document, or edit the extracted text.
 
-Scanned documents are often stored as images, making their text difficult to search, select, or edit. This project uses Optical Character Recognition (OCR) to extract text and provide different output formats.
+## Why readablePDF?
+
+Many books, historical documents, and printed materials exist only as scanned images. Their contents cannot easily be searched, selected, copied, or edited.
+
+readablePDF aims to make these documents more accessible by converting scanned pages into usable digital text while preserving the original document when needed.
 
 ## Features
 
-- Extract text from scanned PDFs and images.
-- Generate searchable PDFs while preserving the original page appearance.
-- Create clean PDFs containing reconstructed text.
-- Export extracted text as `.txt` files.
-- Detect possible OCR errors and suggest word corrections.
-- Review, accept, or reject correction suggestions.
-- Store processing results in persistent Docker storage.
+- **Searchable PDF:** Preserve the original page appearance while adding an invisible OCR text layer for searching and selecting text.
+- **Simple PDF:** Reconstruct extracted text into a clean, readable PDF.
+- **Text Export:** Export recognized content as an editable `.txt` file.
+- **OCR Correction Review:** Detect potentially incorrect OCR words and allow users to accept or reject correction suggestions for text-based outputs.
+- **Multi-format Input:** Process scanned PDFs and common image formats.
+- **Background Processing:** Run document processing asynchronously using Redis and RQ.
+- **Persistent Storage:** Store uploaded documents and generated results using Docker volumes.
+
+## Output Formats
+
+| Format | Purpose |
+|---|---|
+| Searchable PDF | Original appearance with searchable text |
+| Simple PDF | Clean PDF reconstructed from extracted text |
+| Text Document | Editable plain-text output |
 
 ## Technology Stack
 
-- **Backend:** Python, FastAPI
-- **OCR:** Tesseract, pytesseract, OCRmyPDF
-- **PDF processing:** PyMuPDF, ReportLab
-- **Frontend:** React, Vite
-- **Background jobs:** RQ, Redis
-- **Deployment:** Docker Compose
+| Component | Technology |
+|---|---|
+| Backend | Python, FastAPI |
+| OCR Engine | Tesseract, pytesseract |
+| PDF Processing | OCRmyPDF, PyMuPDF, ReportLab |
+| Frontend | React, Vite |
+| Background Jobs | RQ, Redis |
+| Deployment | Docker Compose |
+
+## Architecture
+
+The application follows a simple document-processing pipeline:
+
+1. **Upload:** The user uploads a scanned PDF or image.
+2. **Processing:** The backend validates the document and submits a background job.
+3. **OCR:** The OCR engine extracts text and word-level information.
+4. **Reconstruction:** Depending on the selected format, the system generates the requested output.
+5. **Correction Review:** For Simple PDF and Text Document outputs, users can review suggested corrections.
+6. **Download:** The generated document becomes available for download.
 
 ## Getting Started
 
@@ -33,22 +58,26 @@ Scanned documents are often stored as images, making their text difficult to sea
 - Docker Compose
 - Node.js and npm
 
-### Run the application
-
-Clone the repository:
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/l33kang/readable-pdf.git
-cd scan-to-text
+cd readable-pdf
 ```
 
-Start the backend services:
+### 2. Start the backend
+
+From the project root:
 
 ```bash
 docker compose up --build -d
 ```
 
-Start the frontend:
+This starts the API, background worker, and Redis services.
+
+### 3. Start the frontend
+
+Open another terminal:
 
 ```bash
 cd frontend
@@ -56,29 +85,25 @@ npm install
 npm run dev
 ```
 
-Open the frontend at:
+### 4. Open the application
 
-```text
-http://localhost:5173
-```
-
-The API documentation is available at:
-
-```text
-http://localhost:8000/docs
-```
+- **Frontend:** http://localhost:5173
+- **API:** http://localhost:8000
+- **API Documentation:** http://localhost:8000/docs
 
 ## Project Structure
 
 ```text
-scan-to-text/
+readable-pdf/
 ├── backend/
-│   └── app/
-│       ├── ocr_engine.py
-│       ├── clean_pdf.py
-│       ├── processing.py
-│       ├── tasks.py
-│       └── upload.py
+│   ├── app/
+│   │   ├── ocr_engine.py
+│   │   ├── clean_pdf.py
+│   │   ├── processing.py
+│   │   ├── tasks.py
+│   │   └── upload.py
+│   ├── Dockerfile
+│   └── requirements.txt
 ├── frontend/
 │   └── src/
 ├── docs/
@@ -91,16 +116,34 @@ scan-to-text/
 └── README.md
 ```
 
-## Output Formats
+## Project Status
 
-| Format | Description |
-|---|---|
-| Searchable PDF | Original appearance with searchable text |
-| Simple PDF | Reconstructed document containing readable text |
-| Text document | Extracted text in `.txt` format |
+readablePDF currently supports:
 
-## Current Status
+- Document and image uploads.
+- OCR-based text extraction.
+- Searchable PDF generation.
+- Clean PDF reconstruction.
+- Plain-text export.
+- OCR correction suggestions and review.
+- Asynchronous processing and document downloads.
 
-The application supports document uploads, OCR processing, correction review, and downloading results in all three output formats.
+## Roadmap
 
-Further work will focus on improving OCR accuracy, document layout reconstruction, and the overall reading experience.
+Potential areas of future development include:
+
+- Improving OCR accuracy, especially for multilingual documents.
+- Better preservation of document structure and layout.
+- More advanced reading and accessibility features.
+- Improved handling of complex page layouts.
+- Performance optimization for large documents.
+
+## Contributing
+
+Contributions, suggestions, and bug reports are welcome.
+
+If you find an issue or have an idea for improving readablePDF, feel free to open an issue or submit a pull request.
+
+---
+
+**readablePDF — Making scanned knowledge readable again.**
