@@ -1,0 +1,4 @@
+﻿ReadablePDF is an OCR-powered application.
+It converts scanned documents into searchable digital files.
+The system uses Tesseract to recognize printed text.
+Accurate text extraction makes documents easier to read and search.

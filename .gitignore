@@ -21,3 +21,7 @@ clean-output.pdf
 # Temporary files
 *.tmp
 *.log
+
+# OCR evaluation source documents
+eval/samples/*.pdf
+eval/samples/*.png
