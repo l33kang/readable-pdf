@@ -1,14 +1,14 @@
-# readablePDF
+# scanablePDF
 
 **Turn scanned books, documents, and photographs into readable, searchable digital documents.**
 
-readablePDF is an OCR-powered web application that transforms scanned PDFs and images into accessible digital documents. It extracts printed text while providing different output formats depending on whether users want to preserve the original appearance, obtain a clean reconstructed document, or edit the extracted text.
+scanablePDF is an OCR-powered web application that transforms scanned PDFs and images into accessible digital documents. It extracts printed text while providing different output formats depending on whether users want to preserve the original appearance, obtain a clean reconstructed document, or edit the extracted text.
 
-## Why readablePDF?
+## Why scanablePDF?
 
 Many books, historical documents, and printed materials exist only as scanned images. Their contents cannot easily be searched, selected, copied, or edited.
 
-readablePDF aims to make these documents more accessible by converting scanned pages into usable digital text while preserving the original document when needed.
+scanablePDF aims to make these documents more accessible by converting scanned pages into usable digital text while preserving the original document when needed.
 
 ## Features
 
@@ -119,8 +119,8 @@ Interactive API documentation is available through FastAPI at `/docs`.
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/l33kang/readable-pdf.git
-cd readable-pdf
+git clone https://github.com/l33kang/scanable-pdf.git
+cd scanable-pdf
 ```
 
 ### 2. Start the backend
@@ -176,7 +176,7 @@ npm run dev
 ## Project Structure
 
 ```text
-readable-pdf/
+scanable-pdf/
 ├── backend/
 │   ├── app/
 │   │   ├── ocr_engine.py
@@ -242,7 +242,7 @@ Current limitations include:
 
 ## Project Status
 
-readablePDF currently supports:
+scanablePDF currently supports:
 
 - PDF and image uploads
 - English and Kinyarwanda OCR configuration
@@ -276,8 +276,8 @@ Potential future improvements include:
 
 Contributions, suggestions, and bug reports are welcome.
 
-If you find an issue or have an idea for improving readablePDF, feel free to open an issue or submit a pull request.
+If you find an issue or have an idea for improving scanablePDF, feel free to open an issue or submit a pull request.
 
 ---
 
-**readablePDF — Making scanned knowledge readable again.**
+**scanablePDF — Making scanned knowledge readable again.**
