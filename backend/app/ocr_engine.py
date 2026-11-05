@@ -3,6 +3,8 @@ import json
 import pytesseract
 from PIL import Image
 
+from app.reading_order import reorder_blocks
+
 
 def extract_text(image_path: str, languages: str = "eng") -> str:
     """Extract the complete text from an image."""
@@ -109,7 +111,7 @@ def extract_blocks(image_path: str, languages: str = "eng") -> list[dict]:
         for paragraph in block["paragraphs"]:
             del paragraph["_line_map"]
 
-    return blocks
+    return reorder_blocks(blocks)
 
 def extract_document(image_path: str) -> dict:
     """Extract document text and structured OCR data."""
