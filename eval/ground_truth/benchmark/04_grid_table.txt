@@ -1,0 +1,1 @@
+ID Course Credits Grade 001 Database Systems 15 A 002 Computer Networks 10 B+ 003 Operating Systems 15 A- 004 Artificial Intelligence 20 A 005 Software Engineering 15 B+

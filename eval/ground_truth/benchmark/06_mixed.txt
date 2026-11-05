@@ -1,0 +1,1 @@
+ReadablePDF combines paragraphs and structured information. The OCR engine should recognize both normal prose and tabular content. Task Status Score OCR Complete 92 Layout Testing 87 Export Pending —

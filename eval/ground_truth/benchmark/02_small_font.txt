@@ -1,0 +1,1 @@
+Small text is intentionally used in this benchmark. OCR systems often lose accuracy when characters are tiny, tightly spaced, or printed with weak contrast. A useful document pipeline should still recover the important words without introducing large numbers of substitutions or omissions.

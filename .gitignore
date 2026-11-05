@@ -25,3 +25,23 @@ clean-output.pdf
 # OCR evaluation source documents
 eval/samples/*.pdf
 eval/samples/*.png
+
+# Local OCR test outputs
+real_scan.txt
+real_scan_result.pdf
+result.pdf
+test.pdf
+test.png
+
+# Local OCR evaluation outputs
+eval/predictions/
+eval/predictions_enhanced/
+eval/predictions_gentle/
+eval/predictions_psm4/
+eval/predictions_rows_psm6/
+eval/results/
+
+# Local evaluation samples/ground truth
+eval/ground_truth/little_women_page2.txt
+eval/ground_truth/transcript_table.txt
+eval/samples/benchmark/
